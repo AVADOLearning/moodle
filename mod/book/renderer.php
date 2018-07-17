@@ -14,17 +14,29 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-/**
- * Book plugin version info
- *
- * @package    mod_book
- * @copyright  2004-2012 Petr Skoda {@link http://skodak.org}
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-
 defined('MOODLE_INTERNAL') || die;
 
-$plugin->component = 'mod_book'; // Full name of the plugin (used for diagnostics)
-$plugin->version   = 2018071700; // The current module version (Date: YYYYMMDDXX)
-$plugin->requires  = 2018050800; // Requires this Moodle version
-$plugin->cron      = 0;          // Period for cron to check this module (secs)
+/**
+ * Book renderer
+ *
+ * @package    mod_book
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class mod_book_renderer extends plugin_renderer_base {
+
+    /**
+     * @param  $chapterurl      - Chapter we wish to redirect to.
+     * @return string           - HTML alert containing redirect option.
+     * @throws coding_exception
+     */
+    public function bookmark($chapterurl) {
+        $title   = get_string('bookmark_prompt', 'mod_book');
+        $confirm = html_writer::link($chapterurl, get_string('bookmark_confirm', 'mod_book'),
+            array('class' => 'btn btn-link pull-sm-right'));
+
+        return html_writer::start_div('alert alert-info', array('style' => 'margin-top:70px'))
+            . $title
+            . $confirm
+            . html_writer::end_div();
+    }
+}
