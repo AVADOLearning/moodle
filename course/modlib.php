@@ -503,6 +503,13 @@ function update_moduleinfo($cm, $moduleinfo, $course, $mform = null) {
 
     $completion = new completion_info($course);
     if ($completion->is_enabled()) {
+
+        // Completion data should be reset for all users (see about 100 lines below)
+        // only if any of these completion parameters differ between course and module (activity).
+        $shouldresetstate = $cm->completion != $moduleinfo->completion
+            || $cm->completiongradeitemnumber != $moduleinfo->completiongradeitemnumber
+            || $cm->completionview != $moduleinfo->completionview;
+
         // Completion settings that would affect users who have already completed
         // the activity may be locked; if so, these should not be updated.
         if (!empty($moduleinfo->completionunlocked)) {
@@ -612,8 +619,10 @@ function update_moduleinfo($cm, $moduleinfo, $course, $mform = null) {
 
     // Now that module is fully updated, also update completion data if required.
     // (this will wipe all user completion data and recalculate it)
-    if ($completion->is_enabled() && !empty($moduleinfo->completionunlocked)) {
-        $completion->reset_all_state($cm);
+    if ($completion->is_enabled() && $shouldresetstate && !empty($moduleinfo->completionunlocked)) {
+        $reset_adhoc_task = new \core_course\task\reset_completion_data_task();
+        $reset_adhoc_task->set_custom_data(['course' => $course, 'cmobject' => $cm]);
+        \core\task\manager::queue_adhoc_task($reset_adhoc_task);
     }
     $cm->name = $moduleinfo->name;
     \core\event\course_module_updated::create_from_cm($cm, $modcontext)->trigger();
