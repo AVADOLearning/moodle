@@ -84,4 +84,18 @@ class behat_mod_choice extends behat_base {
         $behatforms->press_button(get_string('savemychoice', 'choice'));
     }
 
+    /**
+     * @Given /^the following choices are made:$/
+     * @param Behat\Gherkin\Node\TableNode $data
+     * @throws \Behat\Mink\Exception\ElementNotFoundException
+     */
+    public function the_following_choices_are_made(Behat\Gherkin\Node\TableNode $data) {
+        foreach ($data->getHash() as $rowdata) {
+            $this->execute("behat_auth::i_log_in_as", $rowdata['username']);
+            $this->execute("behat_general::click_link", $rowdata['course']);
+            $this->execute("behat_general::click_link", $rowdata['choice']);
+            $this->I_choose_option_from_activity($rowdata['option'], $rowdata['choice']);
+            $this->execute("behat_auth::i_log_out");
+        }
+    }
 }
