@@ -59,6 +59,8 @@ global $CHOICE_DISPLAY;
 $CHOICE_DISPLAY = array (CHOICE_DISPLAY_HORIZONTAL   => get_string('displayhorizontal', 'choice'),
                          CHOICE_DISPLAY_VERTICAL     => get_string('displayvertical','choice'));
 
+$maxresponsepages = 1;
+
 /// Standard functions /////////////////////////////////////////////////////////
 
 /**
@@ -447,32 +449,57 @@ function choice_user_submit_response($formanswer, $choice, $userid, $course, $cm
 }
 
 /**
+ *
+ * @param int $responsepage
  * @param array $user
  * @param object $cm
  * @return void Output is echo'd
  */
-function choice_show_reportlink($user, $cm) {
+function choice_show_reportlink($responsepage, $user, $cm) {
     $userschosen = array();
     foreach($user as $optionid => $userlist) {
-        if ($optionid) {
+        if ($optionid && gettype($optionid) == 'integer') {
             $userschosen = array_merge($userschosen, array_keys($userlist));
         }
     }
     $responsecount = count(array_unique($userschosen));
 
     echo '<div class="reportlink">';
-    echo "<a href=\"report.php?id=$cm->id\">".get_string("viewallresponses", "choice", $responsecount)."</a>";
+    echo "<a href=\"report.php?id=$cm->id&responsepage=$responsepage\">".get_string("viewallresponses", "choice", $responsecount)."</a>";
     echo '</div>';
+}
+
+/**
+ * Conditionally shows Previous/Next buttons to browse responses (in batches of 100).
+ *
+ * @param int $responsepage
+ * @param object $cm
+ * @return string $result
+ */
+function response_show_browse_buttons($responsepage, $url, $cmid) {
+    global $OUTPUT, $maxresponsepages;
+
+    $result = '';
+
+    if ($responsepage > 1) {
+        $prevurl = new moodle_url($url, ['id' => $cmid, 'responsepage' => $responsepage - 1]);
+        $result .= $OUTPUT->single_button($prevurl, get_string('previous', 'choice'), 'get');
+    }
+
+    if ($responsepage < $maxresponsepages && $maxresponsepages > 1) {
+        $nexturl = new moodle_url($url, ['id' => $cmid, 'responsepage' => $responsepage + 1]);
+        $result .= $OUTPUT->single_button($nexturl, get_string('next', 'choice'), 'get');
+    }
+
+    return $result;
 }
 
 /**
  * @global object
  * @param object $choice
  * @param object $course
- * @param object $coursemodule
+ * @param object $cm
  * @param array $allresponses
-
- *  * @param bool $allresponses
  * @return object
  */
 function prepare_choice_show_results($choice, $course, $cm, $allresponses) {
@@ -498,16 +525,27 @@ function prepare_choice_show_results($choice, $course, $cm, $allresponses) {
     unset($display->option);
     unset($display->maxanswers);
 
-    $display->numberofuser = count(array_unique($allusers));
     $context = context_module::instance($cm->id);
     $display->viewresponsecapability = has_capability('mod/choice:readresponses', $context);
-    $display->deleterepsonsecapability = has_capability('mod/choice:deleteresponses',$context);
+    $display->deleteresponsecapability = has_capability('mod/choice:deleteresponses',$context);
     $display->fullnamecapability = has_capability('moodle/site:viewfullnames', $context);
 
     if (empty($allresponses)) {
         echo $OUTPUT->heading(get_string("nousersyet"), 3, null);
         return false;
     }
+
+    // Each option now has a count of relevant answers stored in the 'count' sub-array.
+
+    $totalnumberofusers = 0;
+    foreach ($display->options as $optionid => $optionobject) {
+        if ($optionid != 0) {
+            $optionobject->count = $allresponses['choices'][$optionid]['count'];
+            $totalnumberofusers += $optionobject->count;
+        }
+    }
+
+    $display->numberofuser = $totalnumberofusers;
 
     return $display;
 }
@@ -693,14 +731,12 @@ function choice_reset_course_form_defaults($course) {
 /**
  * Actual implementation of the reset course functionality, delete all the
  * choice responses for course $data->courseid.
- *
- * @global object
  * @global object
  * @param object $data the data submitted from the reset course.
- * @return array status array
+ * @return array $status
  */
 function choice_reset_userdata($data) {
-    global $CFG, $DB;
+    global $DB;
 
     $componentstr = get_string('modulenameplural', 'choice');
     $status = array();
@@ -723,19 +759,56 @@ function choice_reset_userdata($data) {
     return $status;
 }
 
+
 /**
+ * Return an array of IDs for all users enrolled in a course. Much like Moodle core's
+ * 'get_enrolled_users', but much lighter when querying the DB.
+ *
  * @global object
- * @global object
+ * @param context $context
+ * @param string $withcapability
+ * @param int $groupid
+ * @param string $userfields
+ * @param null $orderby
+ * @param bool $onlyactive
+ * @return array
+ */
+function get_enrolled_users_ids(context $context, $withcapability = '', $groupid = 0, $userfields = 'u.*',
+                                $orderby = null, $onlyactive = false) {
+    global $DB;
+
+    list($esql, $params) = get_enrolled_sql($context, $withcapability, $groupid, $onlyactive);
+    $sql = "SELECT $userfields
+              FROM {user} u
+              JOIN ($esql) je ON je.id = u.id
+             WHERE u.deleted = 0";
+
+    if ($orderby) {
+        $sql = "$sql ORDER BY $orderby";
+    } else {
+        list($sort, $sortparams) = users_order_by_sql('u');
+        $sql = "$sql ORDER BY $sort";
+        $params = array_merge($params, $sortparams);
+    }
+
+    return $DB->get_fieldset_sql($sql, $params);
+}
+
+/**
+ * Return response data for a given choice.
+ *
  * @global object
  * @uses CONTEXT_MODULE
  * @param object $choice
  * @param object $cm
  * @param int $groupmode
- * @param bool $onlyactive Whether to get response data for active users only.
+ * @param bool $onlyactive Whether to get response data for active users only
+ * @param int $limitfrom offset for database query
  * @return array
  */
-function choice_get_response_data($choice, $cm, $groupmode, $onlyactive) {
-    global $CFG, $USER, $DB;
+function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitfrom = 0) {
+    global $DB;
+    global $maxresponsepages;
 
     $context = context_module::instance($cm->id);
 
@@ -746,33 +819,62 @@ function choice_get_response_data($choice, $cm, $groupmode, $onlyactive) {
         $currentgroup = 0;
     }
 
-/// Initialise the returned array, which is a matrix:  $allresponses[responseid][userid] = responseobject
-    $allresponses = array();
+    $allresponses = [];
 
-/// First get all the users who have access here
-/// To start with we assume they are all "unanswered" then move them later
-    $allresponses[0] = get_enrolled_users($context, 'mod/choice:choose', $currentgroup,
-            user_picture::fields('u', array('idnumber')), null, 0, 0, $onlyactive);
+    // Get just the ids (and not the user objects) of all the students enrolled in the course,
+    // so that the query executes for large courses (40K+ users).
+    $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, 'u.id', null, $onlyactive);
+    $alluseridslist = "(" . implode(',', $alluserids) . ")";
 
-/// Get all the recorded responses for this choice
-    $rawresponses = $DB->get_records('choice_answers', array('choiceid' => $choice->id));
+    // Gather all responses and tally them per option. This query has a smaller payload
+    // (only two fields in choice_answers), and so executes for large courses without running out of memory.
+    $sqlresponses = <<< SQL
+        SELECT c.id, c.optionid
+          FROM {choice_answers} c
+         WHERE c.userid IN $alluseridslist
+SQL;
 
-/// Use the responses to move users into the correct column
+    if ($alluserids) {
+        $rawresponses = $DB->get_records_sql($sqlresponses, []);
+    }
 
-    if ($rawresponses) {
-        $answeredusers = array();
-        foreach ($rawresponses as $response) {
-            if (isset($allresponses[0][$response->userid])) {   // This person is enrolled and in correct group
-                $allresponses[0][$response->userid]->timemodified = $response->timemodified;
-                $allresponses[$response->optionid][$response->userid] = clone($allresponses[0][$response->userid]);
-                $allresponses[$response->optionid][$response->userid]->answerid = $response->id;
-                $answeredusers[] = $response->userid;
+    if (isset($rawresponses) && $rawresponses) {
+        foreach ($choice->option as $optionid => $optionvalue) {
+            $choicecount = 0;
+            foreach ($rawresponses as $rawresponse) {
+                if ($optionid == $rawresponse->optionid) {
+                    $choicecount++;
+                }
             }
+            // Each option now has a count of relevant answers (used in method 'prepare_choice_show_results' above).
+            $allresponses['choices'][$optionid]['count'] = $choicecount;
         }
-        foreach ($answeredusers as $answereduser) {
-            unset($allresponses[0][$answereduser]);
+        // This is used for pagination.
+        $maxresponsepages = ceil(count($rawresponses)/100);
+    }
+
+    // Get combined response + user data. This has a larger payload (fields from both 'choice_answers' and 'user' tables),
+    // but only executes for a reasonable number of users (100) to display. Thus, it too avoids running out of memory.
+    $sqluserdata = <<< SQL
+        SELECT c.id AS choicerecordid, c.choiceid, c.userid, c.optionid, c.timemodified,
+               u.id, u.firstname, u.middlename, u.lastname, u.picture, u.imagealt, u.firstnamephonetic, u.lastnamephonetic, u.alternatename, u.email
+          FROM {user} u
+          JOIN {choice_answers} c ON u.id = c.userid
+         WHERE u.id IN $alluseridslist
+SQL;
+
+    if ($alluserids) {
+        $rawuserdata = $DB->get_records_sql($sqluserdata, [], $limitfrom, 100);
+    }
+
+    if (isset($rawuserdata) && $rawuserdata) {
+        foreach ($rawuserdata as $response) {
+            $allresponses[$response->optionid][$response->userid] = $response;
+            $allresponses[$response->optionid][$response->userid]->answerid = $response->id;
+            $allresponses[$response->optionid][$response->userid]->timemodified = $response->timemodified;
         }
     }
+
     return $allresponses;
 }
 

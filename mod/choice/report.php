@@ -8,6 +8,7 @@
     $download   = optional_param('download', '', PARAM_ALPHA);
     $action     = optional_param('action', '', PARAM_ALPHA);
     $attemptids = optional_param_array('attemptid', array(), PARAM_INT); //get array of responses to delete.
+    $responsepage = optional_param('responsepage', 1, PARAM_INT); // pagination for when there's more than 100 responses per option.
 
     $url = new moodle_url('/mod/choice/report.php', array('id'=>$id));
     if ($format !== CHOICE_PUBLISH_NAMES) {
@@ -63,6 +64,7 @@
         $PAGE->set_heading($course->fullname);
         echo $OUTPUT->header();
         echo $OUTPUT->heading($choice->name, 2, null);
+
         /// Check to see if groups are being used in this choice
         $groupmode = groups_get_activity_groupmode($cm);
         if ($groupmode) {
@@ -86,8 +88,8 @@
 
     // Check if we want to include responses from inactive users.
     $onlyactive = $choice->includeinactive ? false : true;
-
-    $users = choice_get_response_data($choice, $cm, $groupmode, $onlyactive);
+    $limitfrom = ($responsepage -1) * 100;
+    $users = choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitfrom);
 
     $extrafields = get_extra_user_fields($context);
 
@@ -287,5 +289,6 @@
         $downloadlist .= html_writer::tag('div', '', array('class'=>'clearfloat'));
         echo html_writer::tag('div',$downloadlist, array('class'=>'downloadreport'));
     }
+
     echo $OUTPUT->footer();
 

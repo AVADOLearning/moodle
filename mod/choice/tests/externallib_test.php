@@ -82,10 +82,16 @@ class mod_choice_externallib_testcase extends externallib_advanced_testcase {
         foreach ($results['options'] as $option) {
             $resultsarr[$option['id']] = $option['userresponses'];
         }
-        // The stundent1 is the userid who choosed the myanswer(option 3).
+        // The student1 is the userid who choosed the myanswer(option 3).
         $this->assertEquals($resultsarr[$myanswer][0]['userid'], $student1->id);
-        // The stundent2 is the userid who didn't answered yet.
-        $this->assertEquals($resultsarr[0][0]['userid'], $student2->id);
+        // The student2 is the userid who didn't answered yet.
+        foreach ($resultsarr as $resultset) {
+            if (!empty($resultset)) {
+                foreach ($resultset as $result) {
+                    $this->assertNotEquals($result['userid'], $student2->id);
+                }
+            }
+        }
 
         // As Stundent2 we cannot see results (until we answered).
         $this->setUser($student2);
@@ -128,7 +134,13 @@ class mod_choice_externallib_testcase extends externallib_advanced_testcase {
         // The stundent1 is the userid who choosed the myanswer(option 3).
         $this->assertEquals($resultsarr[$myanswer][0]['userid'], $student1->id);
         // The stundent2 is the userid who didn't answered yet.
-        $this->assertEquals($resultsarr[0][0]['userid'], $student2->id);
+        foreach ($resultsarr as $resultset) {
+            if (!empty($resultset)) {
+                foreach ($resultset as $result) {
+                    $this->assertNotEquals($result['userid'], $student2->id);
+                }
+            }
+        }
 
         // Do not publish user names!
         $choice->publish = 0;

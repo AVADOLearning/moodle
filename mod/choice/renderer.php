@@ -109,6 +109,10 @@ class mod_choice_renderer extends plugin_renderer_base {
      * @return string
      */
     public function display_result($choices, $forcepublish = false) {
+        if (!$choices) {
+            return;
+        }
+
         if (empty($forcepublish)) { //allow the publish setting to be overridden
             $forcepublish = $choices->publish;
         }
@@ -132,9 +136,14 @@ class mod_choice_renderer extends plugin_renderer_base {
      * @return string
      */
     public function display_publish_name_vertical($choices) {
+        $responsepage = optional_param('responsepage', 1, PARAM_INT); // pagination for when there's more than 100 responses per option.
+
         global $PAGE;
         $html ='';
+
         $html .= html_writer::tag('h3',format_string(get_string("responses", "choice")));
+
+        $html .= response_show_browse_buttons($responsepage, $PAGE->url, $choices->coursemoduleid);
 
         $attributes = array('method'=>'POST');
         $attributes['action'] = new moodle_url($PAGE->url);
@@ -186,13 +195,11 @@ class mod_choice_renderer extends plugin_renderer_base {
             } else if ($optionid > 0) {
                 $celltext = format_string($choices->options[$optionid]->text);
             }
-            $numberofuser = 0;
-            if (!empty($options->user) && count($options->user) > 0) {
-                $numberofuser = count($options->user);
-            }
 
+            // Don't count responses in the renderer, just retrieve them from where they've already been counted.
+            // Counting happens in lib.php, where the responses have been assembled.
+            $cellusernumber->text = $choices->options[$optionid]->count ? $choices->options[$optionid]->count : 0;
             $celloption->text = $celltext;
-            $cellusernumber->text = $numberofuser;
 
             $columns['options'][] = $celloption;
             $columns['usernumber'][] = $cellusernumber;
@@ -225,34 +232,42 @@ class mod_choice_renderer extends plugin_renderer_base {
                         }
 
                         $userfullname = fullname($user, $choices->fullnamecapability);
-                        if ($choices->viewresponsecapability && $choices->deleterepsonsecapability  && $optionid > 0) {
+                        if ($choices->viewresponsecapability && $choices->deleteresponsecapability && $optionid > 0) {
                             $attemptaction = html_writer::label($userfullname, 'attempt-user'.$user->id, false, array('class' => 'accesshide'));
                             $attemptaction .= html_writer::checkbox('attemptid[]', $user->answerid, '', null,
                                     array('id' => 'attempt-user'.$user->id));
                             $data .= html_writer::tag('div', $attemptaction, array('class'=>'attemptaction'));
                         }
+
                         $userimage = $this->output->user_picture($user, array('courseid'=>$choices->courseid));
                         $data .= html_writer::tag('div', $userimage, array('class'=>'image'));
 
-                        $userlink = new moodle_url('/user/view.php', array('id'=>$user->id,'course'=>$choices->courseid));
-                        $name = html_writer::tag('a', $userfullname, array('href'=>$userlink, 'class'=>'username'));
-                        $data .= html_writer::tag('div', $name, array('class'=>'fullname'));
-                        $data .= html_writer::tag('div','', array('class'=>'clearfloat'));
-                        $optionusers .= html_writer::tag('div', $data, array('class'=>'user'));
+                        $userlink = new moodle_url('/user/view.php', array('id' => $user->id, 'course' => $choices->courseid));
+                        $name = html_writer::tag('a', $userfullname, array('href' => $userlink, 'class' => 'username'));
+                        $data .= html_writer::tag('div', $name, array('class' => 'fullname'));
+                        $data .= html_writer::tag('div', '', array('class' => 'clearfloat'));
+                        $optionusers .= html_writer::tag('div', $data, array('class' => 'user'));
                     }
+
                     $cell->text = $optionusers;
                 }
             }
             $columns[] = $cell;
             $count++;
         }
+
         $row = new html_table_row($columns);
         $table->data[] = $row;
 
         $html .= html_writer::tag('div', html_writer::table($table), array('class'=>'response'));
 
         $actiondata = '';
-        if ($choices->viewresponsecapability && $choices->deleterepsonsecapability) {
+
+        if ($choices->viewresponsecapability) {
+            $actiondata .= response_show_browse_buttons($responsepage, $PAGE->url, $choices->coursemoduleid);
+        }
+
+        if ($choices->viewresponsecapability && $choices->deleteresponsecapability) {
             $selecturl = new moodle_url('#');
 
             $selectallactions = new component_action('click',"checkall");
@@ -296,9 +311,7 @@ class mod_choice_renderer extends plugin_renderer_base {
         $table->summary = get_string('responsesto', 'choice', format_string($choices->name));
         $table->data = array();
 
-        $count = 0;
         ksort($choices->options);
-        $columns = array();
         $rows = array();
 
         $headercelldefault = new html_table_cell();
@@ -335,7 +348,7 @@ class mod_choice_renderer extends plugin_renderer_base {
             $usernumber = $userpercentage = '';
 
             if (!empty($option->user)) {
-               $numberofuser = count($option->user);
+               $numberofuser = $option->count;
             }
 
             if($choices->numberofuser > 0) {
@@ -415,7 +428,6 @@ class mod_choice_renderer extends plugin_renderer_base {
 
         $table->head = array($tableheadertext, $tableheadernumber, $tableheaderpercentage, $tableheadergraph);
 
-        $count = 0;
         ksort($choices->options);
 
         $columndefault = new html_table_cell();
@@ -438,7 +450,7 @@ class mod_choice_renderer extends plugin_renderer_base {
             $numberofuser = $width = $percentageamount = 0;
 
             if (!empty($options->user)) {
-               $numberofuser = count($options->user);
+               $numberofuser = $options->count;
             }
 
             if($choices->numberofuser > 0) {

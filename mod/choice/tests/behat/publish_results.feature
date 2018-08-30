@@ -101,5 +101,14 @@ Feature: A teacher can choose one of 4 options for publishing choice results
     And I log in as "student1"
     And I follow "Course 1"
     When I follow "Choice 1"
-    And I should see "Responses"
+    Then I should see "There are no users yet"
+    And I should not see "Responses"
+    And I should not see "Graph display"
+    # So,
+    When I choose "Option 1" from "Choice 1" choice activity
+    And I am on homepage
+    And I follow "Course 1"
+    When I follow "Choice 1"
+    Then I should see "Responses"
     And I should see "Graph display"
+
