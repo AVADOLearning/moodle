@@ -8,7 +8,9 @@ $id         = required_param('id', PARAM_INT);                 // Course Module 
 $action     = optional_param('action', '', PARAM_ALPHA);
 $attemptids = optional_param_array('attemptid', array(), PARAM_INT); // array of attempt ids for delete action
 $notify     = optional_param('notify', '', PARAM_ALPHA);
-$responsepage = optional_param('responsepage', 1, PARAM_INT); // pagination for when there's more than 100 responses per option.
+
+$offset = optional_param('offset', 0, PARAM_INT);
+$limit = optional_param('limit', 100, PARAM_INT);
 
 $url = new moodle_url('/mod/choice/view.php', array('id'=>$id));
 if ($action !== '') {
@@ -117,12 +119,10 @@ $onlyactive = $choice->includeinactive ? false : true;
 
 // Calculate the required offset for the database query in 'choice_get_response_data', based on the pagination
 // (Prev/Next buttons in the UI).
-$limitfrom = ($responsepage -1) * 100;
-$allresponses = choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitfrom);
-
+$allresponses = choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $offset, $limit);
 
 if (has_capability('mod/choice:readresponses', $context)) {
-    choice_show_reportlink($responsepage, $allresponses, $cm);
+    choice_show_reportlink($allresponses, $cm, $offset, $limit);
 }
 
 echo '<div class="clearer"></div>';
