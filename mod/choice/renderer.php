@@ -136,13 +136,12 @@ class mod_choice_renderer extends plugin_renderer_base {
      * @return string
      */
     public function display_publish_name_vertical($choices) {
+        global $PAGE;
+
         $responsepage = optional_param('responsepage', 1, PARAM_INT); // pagination for when there's more than 100 responses per option.
 
-        global $PAGE;
         $html ='';
-
         $html .= html_writer::tag('h3',format_string(get_string("responses", "choice")));
-
         $html .= response_show_browse_buttons($responsepage, $PAGE->url, $choices->coursemoduleid);
 
         $attributes = array('method'=>'POST');

@@ -819,7 +819,7 @@ function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitf
         $currentgroup = 0;
     }
 
-    $allresponses = [];
+    $allresponses = array();
 
     // Get just the ids (and not the user objects) of all the students enrolled in the course,
     // so that the query executes for large courses (40K+ users).
