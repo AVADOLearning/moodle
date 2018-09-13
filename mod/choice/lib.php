@@ -59,8 +59,6 @@ global $CHOICE_DISPLAY;
 $CHOICE_DISPLAY = array (CHOICE_DISPLAY_HORIZONTAL   => get_string('displayhorizontal', 'choice'),
                          CHOICE_DISPLAY_VERTICAL     => get_string('displayvertical','choice'));
 
-$maxresponsepages = 1;
-
 /// Standard functions /////////////////////////////////////////////////////////
 
 /**
@@ -449,10 +447,12 @@ function choice_user_submit_response($formanswer, $choice, $userid, $course, $cm
 }
 
 /**
+ * Show report link
  *
- * @param int $responsepage
  * @param array $user
  * @param object $cm
+ * @param int $offset
+ * @param int $limit
  * @return void Output is echo'd
  */
 function choice_show_reportlink($user, $cm, $offset = 0, $limit = 100) {
@@ -474,12 +474,19 @@ function choice_show_reportlink($user, $cm, $offset = 0, $limit = 100) {
 /**
  * Conditionally shows Previous/Next buttons to browse responses (in batches of 100).
  *
- * @param int $responsepage
+ * @param mixed $url
  * @param object $cm
+ * @param int $offset
+ * @param int $limit
  * @return string $result
  */
-function response_show_browse_buttons($url, $cmid, $offset = 0, $limit = 100) {
-    global $OUTPUT;
+function response_show_browse_buttons($url, $cm, $offset = 0, $limit = 100) {
+    global $OUTPUT, $PAGE;
+
+    $groupmode = groups_get_activity_groupmode($PAGE->cm);
+    $choice = choice_get_choice($PAGE->cm->instance);
+    // Check if we want to include responses from inactive users.
+    $onlyactive = $choice->includeinactive ? false : true;
 
     //Pull this number from the database
     $totalresults = choice_get_response_count($choice, $cm, $groupmode, $onlyactive);
@@ -487,13 +494,14 @@ function response_show_browse_buttons($url, $cmid, $offset = 0, $limit = 100) {
     $buttons = '';
 
     if ($offset > 0) {
-        $offset = $offset - $limit < 0 ? 0 : $offset - $limit;
-        $prevurl = new moodle_url($url, ['id' => $cmid, 'offset' => $offset, 'limit' => $limit]);
+        $prevoffset = $offset < $limit ? 0 : $offset - $limit;
+        $prevurl = new moodle_url($url, ['id' => $cm->id, 'offset' => $prevoffset, 'limit' => $limit]);
         $buttons .= $OUTPUT->single_button($prevurl, get_string('previous', 'choice'), 'get');
     }
 
     if ($offset + $limit < $totalresults) {
-        $nexturl = new moodle_url($url, ['id' => $cmid, 'offset' => $offset + $limit, 'limit' => $limit]);
+        $nextoffset = $offset + $limit > $totalresults ? $totalresults : $offset + $limit;
+        $nexturl = new moodle_url($url, ['id' => $cm->id, 'offset' => $nextoffset, 'limit' => $limit]);
         $buttons .= $OUTPUT->single_button($nexturl, get_string('next', 'choice'), 'get');
     }
 
@@ -833,7 +841,8 @@ SQL;
  * @param object $cm
  * @param int $groupmode
  * @param bool $onlyactive Whether to get response data for active users only
- * @param int $limitfrom offset for database query
+ * @param int $offset
+ * @param int $limit
  * @return array
  */
 function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $offset = 0, $limit = 100) {
@@ -891,7 +900,7 @@ SQL;
          WHERE u.id IN $alluseridslist
 SQL;
 
-    if ($alluserids) {
+    if ($alluserids && ($offset >= 0)) {
         $rawuserdata = $DB->get_records_sql($sqluserdata, [], $offset, $limit);
     }
 

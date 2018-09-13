@@ -140,12 +140,10 @@ class mod_choice_renderer extends plugin_renderer_base {
 
         $offset = optional_param('offset', 0, PARAM_INT);
         $limit =  optional_param('limit', 100, PARAM_INT);
-
+        $cm = get_coursemodule_from_id('choice', $choices->coursemoduleid);
         $html ='';
-
         $html .= html_writer::tag('h3',format_string(get_string("responses", "choice")));
-
-        $html .= response_show_browse_buttons($PAGE->url, $choices->coursemoduleid, $offset, $limit);
+        $html .= response_show_browse_buttons($PAGE->url, $cm, $offset, $limit);
 
         $attributes = array('method'=>'POST');
         $attributes['action'] = new moodle_url($PAGE->url);
@@ -260,14 +258,8 @@ class mod_choice_renderer extends plugin_renderer_base {
 
         $row = new html_table_row($columns);
         $table->data[] = $row;
-
         $html .= html_writer::tag('div', html_writer::table($table), array('class'=>'response'));
-
         $actiondata = '';
-
-        if ($choices->viewresponsecapability) {
-            $actiondata .= response_show_browse_buttons($PAGE->url, $choices->coursemoduleid, $offset, $limit);
-        }
 
         if ($choices->viewresponsecapability && $choices->deleteresponsecapability) {
             $selecturl = new moodle_url('#');
@@ -286,6 +278,10 @@ class mod_choice_renderer extends plugin_renderer_base {
             $select = new single_select($actionurl, 'action', array('delete'=>get_string('delete')), null, array(''=>get_string('chooseaction', 'choice')), 'attemptsform');
 
             $actiondata .= $this->output->render($select);
+        }
+
+        if ($choices->viewresponsecapability) {
+            $html .= response_show_browse_buttons($PAGE->url, $cm, $offset, $limit);
         }
         $html .= html_writer::tag('div', $actiondata, array('class'=>'responseaction'));
 

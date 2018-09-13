@@ -8,9 +8,8 @@ $id         = required_param('id', PARAM_INT);                 // Course Module 
 $action     = optional_param('action', '', PARAM_ALPHA);
 $attemptids = optional_param_array('attemptid', array(), PARAM_INT); // array of attempt ids for delete action
 $notify     = optional_param('notify', '', PARAM_ALPHA);
-
-$offset = optional_param('offset', 0, PARAM_INT);
-$limit = optional_param('limit', 100, PARAM_INT);
+$offset     = optional_param('offset', 0, PARAM_INT);
+$limit      = optional_param('limit', 100, PARAM_INT);
 
 $url = new moodle_url('/mod/choice/view.php', array('id'=>$id));
 if ($action !== '') {

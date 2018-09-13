@@ -8,7 +8,8 @@
     $download   = optional_param('download', '', PARAM_ALPHA);
     $action     = optional_param('action', '', PARAM_ALPHA);
     $attemptids = optional_param_array('attemptid', array(), PARAM_INT); //get array of responses to delete.
-    $responsepage = optional_param('responsepage', 1, PARAM_INT); // pagination for when there's more than 100 responses per option.
+    $offset     = optional_param('offset', 0, PARAM_INT);
+    $limit      = optional_param('limit', 100, PARAM_INT);
 
     $url = new moodle_url('/mod/choice/report.php', array('id'=>$id));
     if ($format !== CHOICE_PUBLISH_NAMES) {
@@ -88,8 +89,7 @@
 
     // Check if we want to include responses from inactive users.
     $onlyactive = $choice->includeinactive ? false : true;
-    $limitfrom = ($responsepage -1) * 100;
-    $users = choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitfrom);
+    $users = choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $offset, $limit);
 
     $extrafields = get_extra_user_fields($context);
 
