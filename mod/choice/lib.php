@@ -455,7 +455,7 @@ function choice_user_submit_response($formanswer, $choice, $userid, $course, $cm
  * @param object $cm
  * @return void Output is echo'd
  */
-function choice_show_reportlink($responsepage, $user, $cm) {
+function choice_show_reportlink($user, $cm, $offset = 0, $limit = 100) {
     $userschosen = array();
     foreach($user as $optionid => $userlist) {
         if ($optionid && gettype($optionid) == 'integer') {
@@ -464,8 +464,10 @@ function choice_show_reportlink($responsepage, $user, $cm) {
     }
     $responsecount = count(array_unique($userschosen));
 
+    $reportlink = (new moodle_url('/mod/choice/report.php', ['id' => $cm->id, 'offset' => $offset, 'limit' => $limit]))->out();
+
     echo '<div class="reportlink">';
-    echo "<a href=\"report.php?id=$cm->id&responsepage=$responsepage\">".get_string("viewallresponses", "choice", $responsecount)."</a>";
+    echo "<a href=\"$reportlink\">".get_string("viewallresponses", "choice", $responsecount)."</a>";
     echo '</div>';
 }
 
@@ -476,22 +478,26 @@ function choice_show_reportlink($responsepage, $user, $cm) {
  * @param object $cm
  * @return string $result
  */
-function response_show_browse_buttons($responsepage, $url, $cmid) {
-    global $OUTPUT, $maxresponsepages;
+function response_show_browse_buttons($url, $cmid, $offset = 0, $limit = 100) {
+    global $OUTPUT;
 
-    $result = '';
+    //Pull this number from the database
+    $totalresults = choice_get_response_count($choice, $cm, $groupmode, $onlyactive);
 
-    if ($responsepage > 1) {
-        $prevurl = new moodle_url($url, ['id' => $cmid, 'responsepage' => $responsepage - 1]);
-        $result .= $OUTPUT->single_button($prevurl, get_string('previous', 'choice'), 'get');
+    $buttons = '';
+
+    if ($offset > 0) {
+        $offset = $offset - $limit < 0 ? 0 : $offset - $limit;
+        $prevurl = new moodle_url($url, ['id' => $cmid, 'offset' => $offset, 'limit' => $limit]);
+        $buttons .= $OUTPUT->single_button($prevurl, get_string('previous', 'choice'), 'get');
     }
 
-    if ($responsepage < $maxresponsepages && $maxresponsepages > 1) {
-        $nexturl = new moodle_url($url, ['id' => $cmid, 'responsepage' => $responsepage + 1]);
-        $result .= $OUTPUT->single_button($nexturl, get_string('next', 'choice'), 'get');
+    if ($offset + $limit < $totalresults) {
+        $nexturl = new moodle_url($url, ['id' => $cmid, 'offset' => $offset + $limit, 'limit' => $limit]);
+        $buttons .= $OUTPUT->single_button($nexturl, get_string('next', 'choice'), 'get');
     }
 
-    return $result;
+    return $buttons;
 }
 
 /**
@@ -759,7 +765,6 @@ function choice_reset_userdata($data) {
     return $status;
 }
 
-
 /**
  * Return an array of IDs for all users enrolled in a course. Much like Moodle core's
  * 'get_enrolled_users', but much lighter when querying the DB.
@@ -773,12 +778,12 @@ function choice_reset_userdata($data) {
  * @param bool $onlyactive
  * @return array
  */
-function get_enrolled_users_ids(context $context, $withcapability = '', $groupid = 0, $userfields = 'u.*',
+function get_enrolled_users_ids(context $context, $withcapability = '', $groupid = 0,
                                 $orderby = null, $onlyactive = false) {
     global $DB;
 
     list($esql, $params) = get_enrolled_sql($context, $withcapability, $groupid, $onlyactive);
-    $sql = "SELECT $userfields
+    $sql = "SELECT u.id
               FROM {user} u
               JOIN ($esql) je ON je.id = u.id
              WHERE u.deleted = 0";
@@ -794,6 +799,31 @@ function get_enrolled_users_ids(context $context, $withcapability = '', $groupid
     return $DB->get_fieldset_sql($sql, $params);
 }
 
+function choice_get_response_count($choice, $cm, $groupmode, $onlyactive) {
+    global $DB;
+
+    $context = context_module::instance($cm->id);
+
+    // Get the current group
+    if ($groupmode > 0) {
+        $currentgroup = groups_get_activity_group($cm);
+    } else {
+        $currentgroup = 0;
+    }
+
+    $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, null, $onlyactive);
+    $alluseridslist = "(" . implode(',', $alluserids) . ")";
+
+    $sql = <<< SQL
+        SELECT count(c.id)
+          FROM {choice_answers} c
+          WHERE c.choiceid = :choiceid
+          AND c.userid IN $alluseridslist
+SQL;
+
+    return $DB->count_records_sql($sql, array('choiceid'=>$choice->id));
+}
+
 /**
  * Return response data for a given choice.
  *
@@ -806,9 +836,8 @@ function get_enrolled_users_ids(context $context, $withcapability = '', $groupid
  * @param int $limitfrom offset for database query
  * @return array
  */
-function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitfrom = 0) {
+function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $offset = 0, $limit = 100) {
     global $DB;
-    global $maxresponsepages;
 
     $context = context_module::instance($cm->id);
 
@@ -823,7 +852,7 @@ function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitf
 
     // Get just the ids (and not the user objects) of all the students enrolled in the course,
     // so that the query executes for large courses (40K+ users).
-    $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, 'u.id', null, $onlyactive);
+    $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, null, $onlyactive);
     $alluseridslist = "(" . implode(',', $alluserids) . ")";
 
     // Gather all responses and tally them per option. This query has a smaller payload
@@ -831,11 +860,12 @@ function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $limitf
     $sqlresponses = <<< SQL
         SELECT c.id, c.optionid
           FROM {choice_answers} c
-         WHERE c.userid IN $alluseridslist
+          WHERE c.choiceid = :choiceid
+          AND c.userid IN $alluseridslist
 SQL;
 
     if ($alluserids) {
-        $rawresponses = $DB->get_records_sql($sqlresponses, []);
+        $rawresponses = $DB->get_records_sql($sqlresponses, ['choiceid'=>$choice->id]);
     }
 
     if (isset($rawresponses) && $rawresponses) {
@@ -849,8 +879,6 @@ SQL;
             // Each option now has a count of relevant answers (used in method 'prepare_choice_show_results' above).
             $allresponses['choices'][$optionid]['count'] = $choicecount;
         }
-        // This is used for pagination.
-        $maxresponsepages = ceil(count($rawresponses)/100);
     }
 
     // Get combined response + user data. This has a larger payload (fields from both 'choice_answers' and 'user' tables),
@@ -864,7 +892,7 @@ SQL;
 SQL;
 
     if ($alluserids) {
-        $rawuserdata = $DB->get_records_sql($sqluserdata, [], $limitfrom, 100);
+        $rawuserdata = $DB->get_records_sql($sqluserdata, [], $offset, $limit);
     }
 
     if (isset($rawuserdata) && $rawuserdata) {

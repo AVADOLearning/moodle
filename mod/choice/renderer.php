@@ -138,11 +138,14 @@ class mod_choice_renderer extends plugin_renderer_base {
     public function display_publish_name_vertical($choices) {
         global $PAGE;
 
-        $responsepage = optional_param('responsepage', 1, PARAM_INT); // pagination for when there's more than 100 responses per option.
+        $offset = optional_param('offset', 0, PARAM_INT);
+        $limit =  optional_param('limit', 100, PARAM_INT);
 
         $html ='';
+
         $html .= html_writer::tag('h3',format_string(get_string("responses", "choice")));
-        $html .= response_show_browse_buttons($responsepage, $PAGE->url, $choices->coursemoduleid);
+
+        $html .= response_show_browse_buttons($PAGE->url, $choices->coursemoduleid, $offset, $limit);
 
         $attributes = array('method'=>'POST');
         $attributes['action'] = new moodle_url($PAGE->url);
@@ -263,7 +266,7 @@ class mod_choice_renderer extends plugin_renderer_base {
         $actiondata = '';
 
         if ($choices->viewresponsecapability) {
-            $actiondata .= response_show_browse_buttons($responsepage, $PAGE->url, $choices->coursemoduleid);
+            $actiondata .= response_show_browse_buttons($PAGE->url, $choices->coursemoduleid, $offset, $limit);
         }
 
         if ($choices->viewresponsecapability && $choices->deleteresponsecapability) {
