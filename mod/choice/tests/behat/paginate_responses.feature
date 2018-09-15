@@ -344,6 +344,9 @@ Feature: When more than 100 responses are available, they are paginated (100 per
 
   @javascript
   Scenario: Show paginated results
+    # Pagination can be checked indirectly via the Prev/Next buttons. With 104 records:
+    # - there should be two result pages, and only two;
+    # - there can be no Prev button on the first page and no Next on the second.
     Given I log in as "student1"
     And I follow "Course 1"
     When I follow "Choice 1"
@@ -355,16 +358,4 @@ Feature: When more than 100 responses are available, they are paginated (100 per
     And "Next" "button" should not be visible
     And "Previous" "button" should be visible
     And I log out
-    # Pagination can be checked indirectly via the admin's reporting link
-    When I log in as "admin"
-    And I am on "Course 1" course homepage
-    And I follow "Choice 1"
-    Then I should see "Responses"
-    And I should see "View 100 responses"
-    And "Next" "button" should be visible
-    And "Previous" "button" should not be visible
-    And I click on "Next" "button"
-    And "Next" "button" should not be visible
-    And "Previous" "button" should be visible
-    And I should see "View 4 responses"
 

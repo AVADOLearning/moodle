@@ -42,6 +42,8 @@ define('CHOICE_SHOWRESULTS_ALWAYS',       '3');
 define('CHOICE_DISPLAY_HORIZONTAL',  '0');
 define('CHOICE_DISPLAY_VERTICAL',    '1');
 
+define ('CHOICE_LARGE_USER_BATCH', 10000);
+
 /** @global array $CHOICE_PUBLISH */
 global $CHOICE_PUBLISH;
 $CHOICE_PUBLISH = array (CHOICE_PUBLISH_ANONYMOUS  => get_string('publishanonymous', 'choice'),
@@ -456,18 +458,9 @@ function choice_user_submit_response($formanswer, $choice, $userid, $course, $cm
  * @return void Output is echo'd
  */
 function choice_show_reportlink($user, $cm, $offset = 0, $limit = 100) {
-    $userschosen = array();
-    foreach($user as $optionid => $userlist) {
-        if ($optionid && gettype($optionid) == 'integer') {
-            $userschosen = array_merge($userschosen, array_keys($userlist));
-        }
-    }
-    $responsecount = count(array_unique($userschosen));
-
     $reportlink = (new moodle_url('/mod/choice/report.php', ['id' => $cm->id, 'offset' => $offset, 'limit' => $limit]))->out();
-
     echo '<div class="reportlink">';
-    echo "<a href=\"$reportlink\">".get_string("viewallresponses", "choice", $responsecount)."</a>";
+    echo "<a href=\"$reportlink\">".get_string("viewallresponses", "choice")."</a>";
     echo '</div>';
 }
 
@@ -775,7 +768,7 @@ function choice_reset_userdata($data) {
 
 /**
  * Return an array of IDs for all users enrolled in a course. Much like Moodle core's
- * 'get_enrolled_users', but much lighter when querying the DB.
+ * 'get_enrolled_users', but with lighter payload.
  *
  * @global object
  * @param context $context
@@ -807,8 +800,19 @@ function get_enrolled_users_ids(context $context, $withcapability = '', $groupid
     return $DB->get_fieldset_sql($sql, $params);
 }
 
+/**
+ * Return response count for a given choice.
+ *
+ * @param $choice
+ * @param $cm
+ * @param $groupmode
+ * @param $onlyactive
+ * @return int
+ */
 function choice_get_response_count($choice, $cm, $groupmode, $onlyactive) {
     global $DB;
+
+    $count = 0;
 
     $context = context_module::instance($cm->id);
 
@@ -820,16 +824,19 @@ function choice_get_response_count($choice, $cm, $groupmode, $onlyactive) {
     }
 
     $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, null, $onlyactive);
-    $alluseridslist = "(" . implode(',', $alluserids) . ")";
 
-    $sql = <<< SQL
+    if (!empty($alluserids)) {
+        $alluseridslist = "(" . implode(',', $alluserids) . ")";
+        $sql = <<< SQL
         SELECT count(c.id)
           FROM {choice_answers} c
           WHERE c.choiceid = :choiceid
           AND c.userid IN $alluseridslist
 SQL;
+        $count = $DB->count_records_sql($sql, array('choiceid'=>$choice->id));
+    }
 
-    return $DB->count_records_sql($sql, array('choiceid'=>$choice->id));
+    return $count;
 }
 
 /**
@@ -857,24 +864,37 @@ function choice_get_response_data($choice, $cm, $groupmode, $onlyactive, $offset
         $currentgroup = 0;
     }
 
+    // Get id's for all students enrolled in the course.
     $allresponses = array();
-
-    // Get just the ids (and not the user objects) of all the students enrolled in the course,
-    // so that the query executes for large courses (40K+ users).
     $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, null, $onlyactive);
-    $alluseridslist = "(" . implode(',', $alluserids) . ")";
 
-    // Gather all responses and tally them per option. This query has a smaller payload
-    // (only two fields in choice_answers), and so executes for large courses without running out of memory.
-    $sqlresponses = <<< SQL
+    // Get id's for all students who responded to the choice activity.
+    $sqluserswhoresponded = <<< SQL
+      SELECT DISTINCT c.userid
+        FROM {choice_answers} c
+       WHERE c.choiceid = :choiceid
+SQL;
+    $userswhoresponded = $DB->get_records_sql($sqluserswhoresponded, ['choiceid'=>$choice->id]);
+
+    // Intersect the two id arrays, to only select relevant responses.
+    $alluserids = array_intersect($alluserids, array_keys($userswhoresponded));
+
+    // Split the response query into multiple partial sub-queries (CHOICE_LARGE_USER_BATCH=10,000),
+    // so as not to run out of memory with very popular choice activities.
+    if ($alluserids) {
+        $rawresponses = array();
+        $alluseridschunks = array_chunk($alluserids, CHOICE_LARGE_USER_BATCH);
+        foreach ($alluseridschunks as $chunk) {
+            $chunklist = "(" . implode(',', $chunk) . ")";
+            $partsqlresponses = <<< SQL
         SELECT c.id, c.optionid
           FROM {choice_answers} c
-          WHERE c.choiceid = :choiceid
-          AND c.userid IN $alluseridslist
+         WHERE c.choiceid = :choiceid
+           AND c.userid IN $chunklist
 SQL;
-
-    if ($alluserids) {
-        $rawresponses = $DB->get_records_sql($sqlresponses, ['choiceid'=>$choice->id]);
+            $partrawresponses = $DB->get_records_sql($partsqlresponses, ['choiceid'=>$choice->id]);
+            $rawresponses = array_merge($rawresponses, $partrawresponses);
+        }
     }
 
     if (isset($rawresponses) && $rawresponses) {
@@ -890,18 +910,19 @@ SQL;
         }
     }
 
-    // Get combined response + user data. This has a larger payload (fields from both 'choice_answers' and 'user' tables),
-    // but only executes for a reasonable number of users (100) to display. Thus, it too avoids running out of memory.
+    // Get combined response + user data. This  gathers fields from both 'choice_answers' and 'user' tables,
+    // but only executes for a small number of users ($limit=100) to display, avoiding running out of memory.
+    $batchuseridslist = "(" . implode(',', array_slice($alluserids, $offset, $limit)) . ")";
     $sqluserdata = <<< SQL
         SELECT c.id AS choicerecordid, c.choiceid, c.userid, c.optionid, c.timemodified,
                u.id, u.firstname, u.middlename, u.lastname, u.picture, u.imagealt, u.firstnamephonetic, u.lastnamephonetic, u.alternatename, u.email
           FROM {user} u
-          JOIN {choice_answers} c ON u.id = c.userid
-         WHERE u.id IN $alluseridslist
+          JOIN {choice_answers} c ON u.id = c.userid AND c.choiceid = :choiceid
+         WHERE u.id IN $batchuseridslist
 SQL;
-
-    if ($alluserids && ($offset >= 0)) {
-        $rawuserdata = $DB->get_records_sql($sqluserdata, [], $offset, $limit);
+    $totalresults = choice_get_response_count($choice, $cm, $groupmode, $onlyactive);
+    if ($alluserids && $offset >= 0 && $offset <= $totalresults) {
+        $rawuserdata = $DB->get_records_sql($sqluserdata, ['choiceid'=>$choice->id]);
     }
 
     if (isset($rawuserdata) && $rawuserdata) {
