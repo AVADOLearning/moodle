@@ -60,7 +60,7 @@ function message_popup_render_navbar_output(\renderer_base $renderer) {
 
     // Add the notifications popover.
     $enabled = \core_message\api::is_processor_enabled("popup");
-    if ($enabled) {
+    if (($enabled) && (!empty($CFG->notifications))) {
         $unreadcount = \message_popup\api::count_unread_popup_notifications($USER->id);
         $context = [
             'userid' => $USER->id,
