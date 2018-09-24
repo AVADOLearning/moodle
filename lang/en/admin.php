@@ -270,6 +270,7 @@ $string['configmaxconsecutiveidentchars'] = 'Passwords must not have more than t
 $string['configmaxeditingtime'] = 'This specifies the amount of time people have to re-edit forum postings, glossary comments etc.  Usually 30 minutes is a good value.';
 $string['configmaxevents'] = 'Events to Lookahead';
 $string['configmessaging'] = 'Should the messaging system between site users be enabled?';
+$string['confignotifications'] = 'Should notifications be enabled ?';
 $string['configmessagingallowemailoverride'] = 'Allow users to have email message notifications sent to an email address other than the email address in their profile';
 $string['configmessaginghidereadnotifications'] = 'Hide read notifications of events like forum posts when viewing messaging history';
 $string['configmessagingdeletereadnotificationsdelay'] = 'Read notifications can be deleted to save space. How long after a notification is read can it be deleted?';

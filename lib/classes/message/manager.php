@@ -156,8 +156,8 @@ class manager {
             $eventdata->courseid
             )->trigger();
 
-        if (empty($CFG->messaging)) {
-            // If messaging is disabled and they previously had forum notifications handled by the popup processor
+        if (empty($CFG->messaging) && (empty($CFG->notifications))) {
+            // If notifications are disabled and they previously had forum notifications handled by the popup processor
             // or any processor that puts a row in message_working then the notification will remain forever
             // unread. To prevent this mark the message read if messaging is disabled.
             $messageid = message_mark_message_read($savemessage, time());

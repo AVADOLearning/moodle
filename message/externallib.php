@@ -1851,7 +1851,7 @@ class core_message_external extends external_api {
         global $CFG, $DB, $USER;
 
         // Check if private messaging between users is allowed.
-        if (empty($CFG->messaging)) {
+        if (empty($CFG->messaging) && empty($CFG->notifications)) {
             throw new moodle_exception('disabled', 'message');
         }
 
