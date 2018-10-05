@@ -76,10 +76,9 @@ if ($activate) {
     require_capability('moodle/badges:configurecriteria', $context);
 
     $PAGE->url->param('activate', 1);
-    $status = ($badge->status == BADGE_STATUS_INACTIVE) ? BADGE_STATUS_ACTIVE : BADGE_STATUS_ACTIVE_LOCKED;
     if ($confirm == 1) {
         require_sesskey();
-        $badge->set_status($status);
+        $badge->set_status(BADGE_STATUS_ACTIVE);
         $returnurl->param('msg', 'activatesuccess');
 
         if ($badge->type == BADGE_TYPE_SITE) {
@@ -128,7 +127,6 @@ if ($deactivate) {
     require_sesskey();
     require_capability('moodle/badges:configurecriteria', $context);
 
-    $status = ($badge->status == BADGE_STATUS_ACTIVE) ? BADGE_STATUS_INACTIVE : BADGE_STATUS_INACTIVE_LOCKED;
-    $badge->set_status($status);
+    $badge->set_status(BADGE_STATUS_INACTIVE);
     redirect($returnurl);
 }

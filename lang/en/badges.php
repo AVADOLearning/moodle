@@ -402,8 +402,6 @@ $string['reviewconfirm'] = '<p>This will make your badge visible to users and al
 
 <p>It is possible that some users already meet this badge\'s criteria and will be issued this badge immediately after you enable it.</p>
 
-<p>Once a badge has been issued it will be <strong>locked</strong> - certain settings including the criteria and expiry settings can no longer be changed.</p>
-
 <p>Are you sure you want to enable access to the badge \'{$a}\'?</p>';
 $string['save'] = 'Save';
 $string['searchname'] = 'Search by name';
@@ -418,8 +416,6 @@ $string['sitebadges_help'] = 'Site badges can only be awarded to users for site-
 Badges for course-related activities must be created at the course level. Course badges can be found under Course Administration > Badges.';
 $string['statusmessage_0'] = 'This badge is currently not available to users. Enable access if you want users to earn this badge. ';
 $string['statusmessage_1'] = 'This badge is currently available to users. Disable access to make any changes. ';
-$string['statusmessage_2'] = 'This badge is currently not available to users, and its criteria are locked. Enable access if you want users to earn this badge. ';
-$string['statusmessage_3'] = 'This badge is currently available to users, and its criteria are locked. ';
 $string['statusmessage_4'] = 'This badge is currently archived.';
 $string['status'] = 'Badge status';
 $string['status_help'] = 'Status of a badge determines its behaviour in the system:

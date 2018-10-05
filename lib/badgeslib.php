@@ -427,11 +427,6 @@ class badge {
             );
             \core\event\badge_awarded::create($eventdata)->trigger();
 
-            // Lock the badge, so that its criteria could not be changed any more.
-            if ($this->status == BADGE_STATUS_ACTIVE) {
-                $this->set_status(BADGE_STATUS_ACTIVE_LOCKED);
-            }
-
             // Update details in criteria_met table.
             $compl = $this->get_criteria_completions($userid);
             foreach ($compl as $c) {
