@@ -825,15 +825,18 @@ function choice_get_response_count($choice, $cm, $groupmode, $onlyactive) {
 
     $alluserids = get_enrolled_users_ids($context, 'mod/choice:choose', $currentgroup, null, $onlyactive);
 
-    if (!empty($alluserids)) {
-        $alluseridslist = "(" . implode(',', $alluserids) . ")";
-        $sql = <<< SQL
-        SELECT count(c.id)
-          FROM {choice_answers} c
-          WHERE c.choiceid = :choiceid
-          AND c.userid IN $alluseridslist
+    if ($alluserids) {
+        $alluseridschunks = array_chunk($alluserids, CHOICE_LARGE_USER_BATCH);
+        foreach ($alluseridschunks as $chunk) {
+            $chunklist = "(" . implode(',', $chunk) . ")";
+            $sql = <<< SQL
+                SELECT count(c.id)
+                  FROM {choice_answers} c
+                 WHERE c.choiceid = :choiceid
+                   AND c.userid IN $chunklist
 SQL;
-        $count = $DB->count_records_sql($sql, array('choiceid'=>$choice->id));
+            $count += $DB->count_records_sql($sql, array('choiceid'=>$choice->id));
+        }
     }
 
     return $count;
